@@ -1,0 +1,320 @@
+<title>Dopamine Club Archive</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one 4:5 Instagram frame centred, transport controls under it. Single dark page on purpose. */
+:root {
+  --ink: #0B0D10;
+  --graphite: #1B1E23;
+  --line: #2A313C;
+  --chalk: #EEF0F3;
+  --mist: #A9B4C2;
+  --hit: #FF3D24;
+  --display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+  color-scheme: dark;
+}
+body { background: var(--ink); color: var(--chalk); font-family: var(--display); }
+main {
+  max-width: 760px; margin: 0 auto;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 16px;
+}
+header { display: flex; justify-content: space-between; align-items: end; gap: 10px 20px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; text-wrap: balance; }
+h1 span { color: var(--hit); }
+.meta { margin: 0; font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); }
+.stage { width: 100%; max-width: 100%; aspect-ratio: 4 / 5; background: var(--ink); border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+canvas { display: block; width: 100%; height: 100%; }
+.bar { height: 4px; background: var(--graphite); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--hit); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button { font: 600 15px var(--display); border: 0; border-radius: 999px; padding: 12px 20px; min-height: 44px; cursor: pointer; }
+button.primary { background: var(--chalk); color: var(--ink); }
+button.ghost { background: var(--graphite); color: var(--chalk); box-shadow: inset 0 0 0 1px var(--line); }
+button:focus-visible { outline: 2px solid var(--hit); outline-offset: 3px; }
+button:disabled { opacity: 0.5; cursor: default; }
+.time { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--mist); font-variant-numeric: tabular-nums; }
+.status { margin: 0; min-height: 1.4em; font-family: var(--mono); font-size: 13px; color: var(--chalk); }
+.note { margin: 0; max-width: 64ch; font-size: 14px; line-height: 1.55; color: var(--mist); }
+</style>
+
+<main>
+  <header>
+    <h1>Dopamine Club archive<span>.</span></h1>
+    <p class="meta">15 s · 56 cards · 1080 × 1350 · 4:5</p>
+  </header>
+  <div class="stage"><canvas id="c" width="1080" height="1350" role="img" aria-label="A stack of 56 Dopamine Club print cards flipped in fast stop motion"></canvas></div>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <div class="controls">
+    <button class="primary" id="play" disabled>Play</button>
+    <button class="ghost" id="loop" aria-pressed="false">Loop: off</button>
+    <button class="ghost" id="rec" hidden>Record &amp; download video</button>
+    <span class="time" id="time">00.0 / 15.0 s</span>
+  </div>
+  <p class="status" id="status" role="status">Loading…</p>
+  <p class="note">Fast stop-motion edit: up to seven cards a second in the middle. Only the photo window changes and the cards run from dark to light in order of brightness, so neighbouring frames stay close in tone. Recording plays the full 15 seconds in real time, so keep this tab visible.</p>
+</main>
+
+<script>
+(() => {
+  const W = 1080, H = 1350, DUR = 15, END_HOLD = 1.8;
+  const C = { ink: '#0B0D10', graphite: '#1B1E23', paper: '#ECEDEF', chalk: '#EEF0F3', powder: '#C6D8E4', steel: '#5B6472', hit: '#FF3D24' };
+  const SYM = new Path2D('M183.27 56A96 96 0 1 0 183.27 136H144A40 40 0 0 1 144 56ZM32 56H48A40 40 0 0 1 48 136H32Z');
+  const DISPLAY = '"Archivo", "Helvetica Neue", Arial, sans-serif';
+  const MONO = '"JetBrains Mono", "Courier New", monospace';
+  const CW = 720, CH = 920, CX = 540, CY = 660;
+  const L = { x: -CW / 2, y: -CH / 2 };
+  const PH = { x: L.x + 36, y: L.y + 92, w: 648, h: 648 };
+
+  // The deck of cards, ordered dark to light. crop = [sx, sy, sw, sh] as fractions of the source image.
+  const P = (k, tag, crop) => ({ type: 'photo', k, tag, crop });
+  const deck = [
+    { type: 'archive' },
+    P('tights', 'APPAREL'), P('catalog', 'GEAR'), P('catalog', 'OBJECT 01', [0.02, 0.02, 0.36, 0.24]),
+    P('cards', 'PRINT'), P('tshirt', 'APPAREL'), P('wallsign', 'SPACE'), P('metrov1', 'OUTDOOR'), P('platev1', 'GEAR'),
+    P('split3', 'DUALITY'), P('split3', 'DUALITY', [0, 0, 0.5, 1]), P('split1', 'DUALITY'), P('split1', 'DUALITY', [0.5, 0, 0.5, 1]),
+    P('chromesym', 'OBJECT 01'), P('chromesym', 'THE DOSE', [0.5, 0.36, 0.3, 0.3]), P('lightbox', 'OUTDOOR'),
+    P('split2', 'DUALITY'), P('split2', 'GRIP', [0.5, 0, 0.5, 1]), P('collateral', 'PRINT'),
+    { type: 'symbol', bg: C.graphite, fg: C.chalk, dot: C.hit },
+    P('facade', 'SPACE'), P('book', 'PRINT'), P('book', 'PRINT', [0.04, 0.12, 0.46, 0.7]), P('stationery', 'PRINT'),
+    P('shortsc', 'APPAREL'), P('tee', 'APPAREL'), P('bra', 'APPAREL'), P('bottles', 'GEAR'),
+    { type: 'symbol', bg: C.hit, fg: C.ink, dot: C.chalk },
+    P('hero', 'ATHLETE'), P('wall', 'OUTDOOR'), P('gymbag', 'GEAR'), P('kb', 'GEAR'), P('grip', 'ATHLETE'), P('grip', 'GRIP', [0.15, 0.25, 0.7, 0.45]),
+    P('pullup', 'ATHLETE'), P('athletes', 'ATHLETE'), P('steel', 'GEAR'), P('shaker', 'GEAR'), P('cap', 'APPAREL'), P('shop', 'SPACE'),
+    P('metro', 'OUTDOOR'), P('metro', 'OUTDOOR', [0.25, 0.04, 0.4, 0.8]), P('deadlift', 'ATHLETE'),
+    { type: 'word', bg: C.powder, text: 'EARNED,' },
+    P('barbell', 'ATHLETE'), P('lunge', 'ATHLETE'), P('plate', 'GEAR'),
+    { type: 'word', bg: C.powder, text: 'NOT SCROLLED', stop: true },
+    P('shorts', 'APPAREL'), P('run', 'ATHLETE'), P('run', 'MOTION', [0.45, 0.2, 0.4, 0.6]), P('socks', 'APPAREL'),
+    { type: 'swatch' },
+    { type: 'wordmark' },
+    { type: 'end' }
+  ];
+  const N = deck.length;
+
+  // Timing: slow at both ends, fastest in the middle; the last card holds.
+  const f = deck.slice(0, -1).map((_, i, a) => 1 + 1.6 * (1 - Math.sin(Math.PI * i / (a.length - 1))));
+  const base = (DUR - END_HOLD) / f.reduce((s, v) => s + v, 0);
+  let acc = 0;
+  deck.forEach((c, i) => { c.t0 = acc; c.d = i < N - 1 ? f[i] * base : END_HOLD; acc += c.d; c.n = i + 1; });
+
+  // Seeded placement so every play is identical.
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  deck.forEach(c => { c.rot = (rnd() - 0.5) * 5 * Math.PI / 180; c.dx = (rnd() - 0.5) * 44; c.dy = (rnd() - 0.5) * 30; });
+  deck[N - 1].rot = 0; deck[N - 1].dx = 0; deck[N - 1].dy = 0;
+  const pile = [{ rot: -0.06, dx: -14, dy: 16 }, { rot: 0.045, dx: 18, dy: 8 }];
+
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const imgs = {};
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  function symbol(x, y, size, fg, dot) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(size / 192, size / 192);
+    ctx.fillStyle = fg; ctx.fill(SYM, 'evenodd');
+    ctx.beginPath(); ctx.arc(144, 96, 16, 0, Math.PI * 2); ctx.fillStyle = dot; ctx.fill();
+    ctx.restore();
+  }
+  function mono(t, x, y, align, color, size) {
+    ctx.font = '500 ' + (size || 17) + 'px ' + MONO;
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
+    ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(t, x, y);
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  }
+  function wordmark(x, y, size, color, align) {
+    ctx.font = '600 ' + size + 'px ' + DISPLAY;
+    if ('letterSpacing' in ctx) ctx.letterSpacing = (-size * 0.04) + 'px';
+    const w = ctx.measureText('Dopamine Club').width;
+    const left = align === 'center' ? x - (w + size * 0.22) / 2 : x;
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('Dopamine Club', left, y);
+    ctx.beginPath(); ctx.arc(left + w + size * 0.12, y - size * 0.08, size * 0.08, 0, Math.PI * 2);
+    ctx.fillStyle = C.hit; ctx.fill();
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  }
+  function photo(img, crop, x, y, w, h) {
+    let sx = 0, sy = 0, sw = img.width, sh = img.height;
+    if (crop) { sx = crop[0] * img.width; sy = crop[1] * img.height; sw = crop[2] * img.width; sh = crop[3] * img.height; }
+    const r = Math.max(w / sw, h / sh);
+    const cw = w / r, ch = h / r;
+    ctx.drawImage(img, sx + (sw - cw) / 2, sy + (sh - ch) / 2, cw, ch, x, y, w, h);
+  }
+  const pad = n => String(n).padStart(3, '0');
+
+  function cardFace(c) {
+    const paper = c.type === 'symbol' ? c.bg : c.type === 'word' ? c.bg : c.type === 'archive' ? C.ink : C.paper;
+    ctx.fillStyle = paper; ctx.fillRect(L.x, L.y, CW, CH);
+    const dark = paper === C.ink || paper === C.graphite;
+    const ink = dark ? C.chalk : C.ink;
+    const sub = dark ? '#A9B4C2' : C.steel;
+    if (c.type === 'photo') {
+      mono('DOPAMINE CLUB®', L.x + 36, L.y + 58, 'left', ink);
+      mono(pad(c.n) + ' / ' + pad(N), L.x + CW - 36, L.y + 58, 'right', ink);
+      const img = imgs[c.k];
+      ctx.fillStyle = C.ink; ctx.fillRect(PH.x, PH.y, PH.w, PH.h);
+      if (img) photo(img, c.crop, PH.x, PH.y, PH.w, PH.h);
+      ctx.fillStyle = C.ink; ctx.fillRect(L.x + 36, L.y + 776, CW - 72, 1.5);
+      mono('ARCHIVE ' + pad(c.n), L.x + 36, L.y + 814, 'left', ink);
+      mono(c.tag, L.x + 36, L.y + 842, 'left', sub);
+      mono('EARNED, NOT SCROLLED.', L.x + CW - 36, L.y + 814, 'right', sub);
+      symbol(L.x + CW - 76, L.y + CH - 70, 40, C.ink, C.hit);
+    } else if (c.type === 'archive') {
+      mono('ARCHIVE 001 — ' + pad(N), 0, L.y + 70, 'center', sub);
+      wordmark(0, 30, 84, C.chalk, 'center');
+      mono('STRENGTH & CONDITIONING', 0, 100, 'center', sub);
+      symbol(-24, L.y + CH - 100, 48, C.chalk, C.hit);
+    } else if (c.type === 'symbol') {
+      symbol(-180, -200, 360, c.fg, c.dot);
+      mono(pad(c.n) + ' / ' + pad(N), 0, L.y + CH - 60, 'center', c.bg === C.hit ? C.ink : '#A9B4C2');
+    } else if (c.type === 'word') {
+      let size = 132;
+      ctx.font = '800 ' + size + 'px ' + DISPLAY;
+      let w = ctx.measureText(c.text).width + (c.stop ? size * 0.3 : 0);
+      if (w > CW - 80) { size *= (CW - 80) / w; ctx.font = '800 ' + size + 'px ' + DISPLAY; }
+      ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(c.text, c.stop ? -size * 0.12 : 0, 0);
+      if (c.stop) {
+        const tw = ctx.measureText(c.text).width;
+        ctx.beginPath(); ctx.arc(tw / 2 + size * 0.02, size * 0.28, size * 0.09, 0, Math.PI * 2); ctx.fillStyle = C.hit; ctx.fill();
+      }
+      mono(pad(c.n) + ' / ' + pad(N), 0, L.y + CH - 60, 'center', C.steel);
+    } else if (c.type === 'swatch') {
+      mono('COLOUR', L.x + 36, L.y + 58, 'left', C.ink);
+      const chips = [['INK', '#0B0D10', '#0B0D10'], ['HIT RED', '#FF3D24', '#FF3D24'], ['POWDER', '#C6D8E4', '#C6D8E4'], ['CHALK', '#EEF0F3', '#EEF0F3']];
+      chips.forEach((ch, i) => {
+        const x = L.x + 36 + i * 166, y = L.y + 92;
+        ctx.fillStyle = ch[1]; ctx.fillRect(x, y, 150, 560);
+        if (ch[0] === 'CHALK') { ctx.strokeStyle = '#C9CED6'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, 148, 558); }
+        mono(ch[0], x, y + 600, 'left', C.ink, 16);
+        mono(ch[2], x, y + 626, 'left', C.steel, 16);
+      });
+    } else if (c.type === 'wordmark') {
+      wordmark(0, 20, 96, C.ink, 'center');
+      mono('EARNED, NOT SCROLLED.', 0, 90, 'center', C.steel);
+    } else {
+      symbol(-130, -260, 260, C.ink, C.hit);
+      wordmark(0, 110, 84, C.ink, 'center');
+      mono('EARNED, NOT SCROLLED.', 0, 172, 'center', C.steel, 18);
+      mono('ARCHIVE 001 — ' + pad(N), 0, L.y + CH - 60, 'center', C.steel);
+    }
+  }
+
+  function drawCard(c, land) {
+    ctx.save();
+    ctx.translate(CX + c.dx, CY + c.dy - 14 * land);
+    ctx.rotate(c.rot);
+    const s = 1 + 0.035 * land; ctx.scale(s, s);
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 36; ctx.shadowOffsetY = 12;
+    ctx.fillStyle = C.paper; ctx.fillRect(L.x, L.y, CW, CH);
+    ctx.shadowColor = 'transparent';
+    cardFace(c);
+    ctx.restore();
+  }
+
+  function render(t) {
+    t = clamp(t, 0, DUR - 0.001);
+    let i = deck.findIndex(c => t >= c.t0 && t < c.t0 + c.d); if (i < 0) i = N - 1;
+    const lt = t - deck[i].t0;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = C.ink; ctx.fillRect(0, 0, W, H);
+    pile.forEach(p => {
+      ctx.save(); ctx.translate(CX + p.dx, CY + p.dy); ctx.rotate(p.rot);
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+      ctx.fillStyle = '#D9DCE1'; ctx.fillRect(L.x, L.y, CW, CH); ctx.restore();
+    });
+    for (let j = Math.max(0, i - 3); j < i; j++) drawCard(deck[j], 0);
+    const land = 1 - clamp(lt / 0.07, 0, 1);
+    drawCard(deck[i], land);
+    ctx.fillStyle = C.hit; ctx.fillRect(0, H - 6, W * (t / DUR), 6);
+    document.getElementById('bar').style.width = (t / DUR * 100) + '%';
+    document.getElementById('time').textContent = t.toFixed(1).padStart(4, '0') + ' / 15.0 s';
+  }
+
+  // ---- transport ----
+  const playBtn = document.getElementById('play');
+  const loopBtn = document.getElementById('loop');
+  const recBtn = document.getElementById('rec');
+  const status = document.getElementById('status');
+  let raf = 0, start = 0, playing = false, loop = false, onEnd = null;
+
+  function tick(now) {
+    const t = (now - start) / 1000;
+    if (t >= DUR) {
+      render(DUR);
+      if (loop && !onEnd) { start = now; raf = requestAnimationFrame(tick); return; }
+      playing = false; playBtn.textContent = 'Replay';
+      const cb = onEnd; onEnd = null; if (cb) cb();
+      return;
+    }
+    render(t);
+    raf = requestAnimationFrame(tick);
+  }
+  function play(cb) {
+    cancelAnimationFrame(raf);
+    onEnd = cb || null; playing = true; playBtn.textContent = 'Stop';
+    start = performance.now(); raf = requestAnimationFrame(tick);
+  }
+  function stop() { cancelAnimationFrame(raf); playing = false; onEnd = null; playBtn.textContent = 'Play'; render(DUR); }
+  playBtn.addEventListener('click', () => playing ? stop() : play());
+  loopBtn.addEventListener('click', () => {
+    loop = !loop; loopBtn.setAttribute('aria-pressed', String(loop));
+    loopBtn.textContent = 'Loop: ' + (loop ? 'on' : 'off');
+  });
+
+  async function record(downloads) {
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4']
+      .find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+    if (!mime || !cv.captureStream) { status.textContent = 'This browser cannot record the canvas. Try Chrome or Edge.'; return; }
+    const chunks = [];
+    const rec = new MediaRecorder(cv.captureStream(30), { mimeType: mime, videoBitsPerSecond: 14000000 });
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(chunks, { type: mime });
+      status.textContent = 'Recorded ' + (blob.size / 1048576).toFixed(1) + ' MB. Confirm the download…';
+      try {
+        await downloads.save({ filename: 'dopamine-club-archive.' + ext, data: blob });
+        status.textContent = 'Video saved as dopamine-club-archive.' + ext + '.';
+      } catch (e) {
+        const code = e && e.code;
+        status.textContent = code === 'declined' ? 'Download cancelled.'
+          : code === 'rate_limited' ? 'A download prompt is already open. Try again in a moment.'
+          : 'This view cannot save files.';
+      }
+      recBtn.disabled = false; playBtn.disabled = false; loopBtn.disabled = false;
+    };
+    recBtn.disabled = true; playBtn.disabled = true; loopBtn.disabled = true;
+    status.textContent = 'Recording… 15 seconds.';
+    render(0);
+    rec.start(250);
+    play(() => setTimeout(() => rec.stop(), 150));
+  }
+
+  async function boot() {
+    try { await Promise.all([document.fonts.load('600 100px ' + DISPLAY), document.fonts.load('800 100px ' + DISPLAY), document.fonts.load('500 17px ' + MONO)]); } catch (e) {}
+    const keys = [...new Set(deck.filter(c => c.type === 'photo').map(c => c.k))];
+    await Promise.all(keys.map(k => new Promise(res => {
+      const im = new Image();
+      im.onload = () => { imgs[k] = im; res(); };
+      im.onerror = () => res();
+      im.src = 'img/' + k + '.jpg';
+    })));
+    const m = /^#t([\d.]+)$/.exec(location.hash);
+    render(m ? parseFloat(m[1]) : DUR);
+    playBtn.disabled = false;
+    const missing = keys.filter(k => !imgs[k]).length;
+    status.textContent = missing ? missing + ' images did not load; their cards show black.' : 'Ready. ' + N + ' cards. Press Play.';
+    const downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+    if (downloads && window.MediaRecorder && cv.captureStream) {
+      recBtn.hidden = false;
+      recBtn.addEventListener('click', () => record(downloads));
+    }
+  }
+  boot();
+})();
+</script>

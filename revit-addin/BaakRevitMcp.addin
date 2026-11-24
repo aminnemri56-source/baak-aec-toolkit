@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>BAAK Revit MCP</Name>
+    <Assembly>BaakRevitMcp\BaakRevitMcp.dll</Assembly>
+    <FullClassName>BaakRevitMcp.App</FullClassName>
+    <ClientId>7b3f1c2a-9d46-4e58-b0a1-5c2e6f84d371</ClientId>
+    <VendorId>BAAK</VendorId>
+    <VendorDescription>BAAK Studio, Tunis</VendorDescription>
+  </AddIn>
+</RevitAddIns>
